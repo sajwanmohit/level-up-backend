@@ -33,7 +33,7 @@ Alternatively start only the local database with `docker compose up -d postgres`
 | `DB_USERNAME` | local database user |
 | `DB_PASSWORD` | local-only password; set securely in Render for production |
 | `SERVER_PORT` | `8080` |
-| `FRONTEND_URL` | Local `http://localhost:5173`; set to the deployed frontend origin in Render |
+| `FRONTEND_URL` | Local `http://localhost:5173`; production defaults to `https://level-up-frontend-rho.vercel.app` and can be overridden with the deployed frontend origin |
 
 Flyway migrations under `src/main/resources/db/migration` are the schema source of truth. Hibernate runs with `ddl-auto=validate`; it does not create or update production tables. A named Docker volume retains local PostgreSQL data.
 
@@ -101,4 +101,4 @@ git push -u origin main
 
 ## Render deployment
 
-Deploy the Dockerfile as a Render Web Service and provision a separate Render PostgreSQL database. Set `SPRING_PROFILES_ACTIVE=prod`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, `SERVER_PORT` (or use Render's `PORT` mapped to `SERVER_PORT`), and `FRONTEND_URL` in the service environment. Set credentials in Render's secret environment variables only, use the database's private/internal host where available, and do not add PostgreSQL to the application container. Flyway applies pending migrations when the application starts. Configure a health-check path appropriate to your deployment (for example `/v3/api-docs`); protect user data with authentication before making the API publicly accessible.
+Deploy the Dockerfile as a Render Web Service and provision a separate Render PostgreSQL database. Set `SPRING_PROFILES_ACTIVE=prod`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD` in the service environment. `FRONTEND_URL` defaults to `https://level-up-frontend-rho.vercel.app`; set it explicitly if you use a different production origin. Set credentials in Render's secret environment variables only, use the database's private/internal host where available, and do not add PostgreSQL to the application container. The server listens on Render's `PORT` when provided (otherwise `SERVER_PORT`, defaulting to `8080`). Flyway applies pending migrations when the application starts. Configure a health-check path appropriate to your deployment (for example `/v3/api-docs`); protect user data with authentication before making the API publicly accessible.
