@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:levelup}
+    username: ${DB_USERNAME:levelup}
+    password: ${DB_PASSWORD:local-development-only}
+  jpa:
+    show-sql: false
+  cors:
+    allowed-origin: ${FRONTEND_URL:http://localhost:5173}

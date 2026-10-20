@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: level-up-backend
+  profiles:
+    default: local
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+server:
+  port: ${PORT:${SERVER_PORT:8080}}
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-levelup}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME in your local environment}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your local environment}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:?Set DB_USERNAME in your local environment} -d ${DB_NAME:-levelup}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-levelup}
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in your local environment}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your local environment}
+      SERVER_PORT: 8080
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+volumes:
+  postgres_data:
