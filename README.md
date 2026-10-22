@@ -43,7 +43,7 @@ All endpoints are under `/api/v1`. UUIDs are used for identifiers. JSON date fie
 
 | Method and path | Purpose / request |
 |---|---|
-| `POST /users` | Create a user using `{ "name": "...", "email": "..." }`. Bootstrap endpoint pending future authentication. |
+| `POST /users` | Create a user using `{ "name": "...", "email": "..." }`. Both fields are required; name is limited to 120 characters and email must be valid and at most 254 characters. Returns `201` with `{ "id": "uuid", "name": "...", "email": "..." }`. Email is unique; duplicate emails follow the common `400 INVALID_REQUEST` conflict response. Bootstrap endpoint pending future authentication. |
 | `GET /exercises` | List exercises alphabetically. |
 | `POST /exercises` | Create exercise: `name` required; optional `description`, `muscleGroup`, `equipment`, `movementType`; `compound` boolean. |
 | `GET /workouts?userId={uuid}[&from=YYYY-MM-DD&to=YYYY-MM-DD]` | List workouts for a user, optionally within an inclusive date range. Supply both range bounds or neither. |
