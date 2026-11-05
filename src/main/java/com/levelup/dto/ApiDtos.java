@@ -8,7 +8,6 @@ import java.util.*;
 
 public final class ApiDtos {
     private ApiDtos() {}
-    public record UserRequest(@NotBlank @Size(max = 120) String name, @NotBlank @Email @Size(max = 254) String email) {}
     public record UserResponse(UUID id, String name, String email) {
         public static UserResponse from(User u) { return new UserResponse(u.getId(), u.getName(), u.getEmail()); }
     }

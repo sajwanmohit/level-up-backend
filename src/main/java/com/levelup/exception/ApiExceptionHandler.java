@@ -10,6 +10,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -17,6 +19,14 @@ public class ApiExceptionHandler {
     public record ApiError(Instant timestamp, int status, String error, String message, String path) {}
     @ExceptionHandler(ResourceNotFoundException.class)
     ResponseEntity<ApiError> notFound(ResourceNotFoundException ex, HttpServletRequest request) { return response(HttpStatus.NOT_FOUND, "NOT_FOUND", ex.getMessage(), request); }
+    @ExceptionHandler(BadCredentialsException.class)
+    ResponseEntity<ApiError> invalidCredentials(HttpServletRequest request) {
+        return response(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password", request);
+    }
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ApiError> forbidden(HttpServletRequest request) {
+        return response(HttpStatus.FORBIDDEN, "FORBIDDEN", "User does not own this resource", request);
+    }
     @ExceptionHandler({IllegalArgumentException.class, DataIntegrityViolationException.class})
     ResponseEntity<ApiError> badRequest(RuntimeException ex, HttpServletRequest request) {
         String message = ex instanceof DataIntegrityViolationException ? "Request conflicts with existing data" : ex.getMessage();

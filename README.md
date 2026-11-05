@@ -4,7 +4,7 @@ Level Up is a REST backend for daily strength-workout tracking and training anal
 
 ## Architecture and stack
 
-Java 21, Spring Boot 3, Spring Web, Spring Data JPA, PostgreSQL, Flyway and Maven. This is a layered modular monolith: controllers handle HTTP, services own business rules, repositories handle persistence, and DTO records define API contracts. The `analytics` and `pr` packages own analysis and records separately from workout CRUD. Authentication is not implemented; V1 associates requests with an explicit `userId` and is not intended to be exposed publicly without an authentication/authorization layer.
+Java 21, Spring Boot 3, Spring Web, Spring Security, Spring Data JPA, PostgreSQL, Flyway and Maven. This is a layered modular monolith: controllers handle HTTP, services own business rules, repositories handle persistence, and DTO records define API contracts. The `analytics` and `pr` packages own analysis and records separately from workout CRUD. Stateless bearer-token authentication is used for API requests, with per-user resource ownership enforced in the services.
 
 All measurement values use `BigDecimal`. The e1RM calculator is an injectable component using Epley: `weight * (1 + reps / 30)`, rounded to two decimal places. PR history records a new row only when a working set exceeds the prior best of that type for the same user and exercise. Maximum reps is the highest reps in a single working set; volume PR is the highest single-set `weight × reps`. Warmups do not count toward PRs or working-set volume. Workout totals include all exercises and working sets; average RPE/RIR are null if none were recorded.
 
@@ -14,11 +14,11 @@ Requirements: Docker with Compose and Java 21/Maven if running outside container
 
 ```sh
 cp .env.example .env
-# Change DB_PASSWORD to a local-only value.
+# Change DB_PASSWORD and JWT_SIGNING_KEY to local-only values.
 docker compose up --build
 ```
 
-Alternatively start only the local database with `docker compose up -d postgres`, then run `SPRING_PROFILES_ACTIVE=local mvn spring-boot:run`. The local profile defaults to the example credentials (`levelup` / `local-development-only`); if you change `DB_PASSWORD` in `.env`, export the variables when running Maven directly or configure them in your IDE run configuration. Compose loads `.env` automatically. The application is available at `http://localhost:8080`; Swagger UI is at `/swagger-ui.html` and OpenAPI JSON at `/v3/api-docs`.
+Alternatively start only the local database with `docker compose up -d postgres`, then run `SPRING_PROFILES_ACTIVE=local mvn spring-boot:run`. Local database credentials and the JWT signing key are read from `.env`; copy `.env.example` to `.env` and replace its placeholders. Docker Compose loads `.env` automatically. When running Maven directly, export the variables from `.env` in your shell or configure them in your IDE run configuration. Generate the local signing key with `openssl rand -base64 32`. The application is available at `http://localhost:8080`; Swagger UI is at `/swagger-ui.html` and OpenAPI JSON at `/v3/api-docs`.
 
 ## Environment and database
 
@@ -32,21 +32,39 @@ Alternatively start only the local database with `docker compose up -d postgres`
 | `DB_NAME` | `levelup` |
 | `DB_USERNAME` | local database user |
 | `DB_PASSWORD` | local-only password; set securely in Render for production |
+| `JWT_SIGNING_KEY` | Required Base64-encoded random key of at least 32 bytes; generate with `openssl rand -base64 32`. Keep it in local `.env` or deployed server secrets; rotating it invalidates issued tokens. |
+| `AUTH_TOKEN_EXPIRATION_SECONDS` | Access-token lifetime; defaults to `900` seconds (15 minutes). |
 | `SERVER_PORT` | `8080` |
 | `FRONTEND_URL` | Local `http://localhost:5173`; production defaults to `https://level-up-frontend-rho.vercel.app` and can be overridden with the deployed frontend origin |
 
 Flyway migrations under `src/main/resources/db/migration` are the schema source of truth. Hibernate runs with `ddl-auto=validate`; it does not create or update production tables. A named Docker volume retains local PostgreSQL data.
 
+Existing users created before password authentication retain their fitness data, but their new `password_hash` is empty and they cannot log in until provisioned through a separately verified account-recovery process. Do not assign a password to a legacy account based only on an unverified email address.
+
 ## REST API
 
-All endpoints are under `/api/v1`. UUIDs are used for identifiers. JSON date fields use ISO-8601 (`YYYY-MM-DD` for workout dates and UTC instants for timestamps). Validation failures use the common API error response. `userId` is a required query parameter on user-scoped list/analytics/PR endpoints; V1 has no authentication boundary.
+All training endpoints are under `/api/v1`. UUIDs are used for identifiers. JSON date fields use ISO-8601 (`YYYY-MM-DD` for workout dates and UTC instants for timestamps). Validation failures use the common API error response.
+
+### Authentication
+
+| Method and path | Request / response |
+|---|---|
+| `POST /api/v1/auth/signup` | `{ "name": "...", "email": "...", "password": "..." }`. Name/email follow the existing validation; password must be 8–72 characters and no more than 72 UTF-8 bytes for BCrypt. Email is trimmed and lower-cased. Returns `201` with no body. |
+| `POST /api/v1/auth/login` | `{ "email": "...", "password": "..." }`. Returns exactly `{ "user": { "id": "uuid", "name": "...", "email": "..." }, "accessToken": "..." }`. Unknown email and incorrect password return the same `401` credential error. |
+
+Passwords are stored as BCrypt hashes. Login issues an HS256 JWT with the user's UUID as `sub`, issuer `level-up-backend`, and an expiry set by `AUTH_TOKEN_EXPIRATION_SECONDS` (default 900 seconds). The signing key comes from the required `JWT_SIGNING_KEY` server environment variable; it must be a Base64-encoded random key of at least 32 bytes and is never stored in the repository. Send it as `Authorization: Bearer <accessToken>`.
+
+Every `/api/v1/**` endpoint requires a valid, unexpired token except `POST /api/v1/auth/signup` and `POST /api/v1/auth/login`. User IDs supplied in query parameters or workout request bodies must match the token subject; a mismatch is rejected with `403`. Access to workouts, their exercise sessions/sets, daily analytics, and personal records is limited to the owning user. Missing, invalid, and expired tokens return `401`. The two authentication POST routes and API documentation routes are public. The former passwordless `POST /api/v1/users` route is no longer available.
+
+### Request logging
+
+The backend logs each HTTP request with its method, path (without query parameters), response status, duration, and a generated `X-Request-Id` returned in the response. Client-supplied request IDs, request/response bodies, authorization headers, passwords, tokens, and query parameter values are not logged. HTTP 4xx requests log at `WARN`, 5xx at `ERROR`, and other responses at `INFO`.
 
 | Method and path | Purpose / request |
 |---|---|
-| `POST /users` | Create a user using `{ "name": "...", "email": "..." }`. Both fields are required; name is limited to 120 characters and email must be valid and at most 254 characters. Returns `201` with `{ "id": "uuid", "name": "...", "email": "..." }`. Email is unique; duplicate emails follow the common `400 INVALID_REQUEST` conflict response. Bootstrap endpoint pending future authentication. |
 | `GET /exercises` | List exercises alphabetically. |
 | `POST /exercises` | Create exercise: `name` required; optional `description`, `muscleGroup`, `equipment`, `movementType`; `compound` boolean. |
-| `GET /workouts?userId={uuid}[&from=YYYY-MM-DD&to=YYYY-MM-DD]` | List workouts for a user, optionally within an inclusive date range. Supply both range bounds or neither. |
+| `GET /workouts?userId={uuid}[&from=YYYY-MM-DD&to=YYYY-MM-DD]` | List the authenticated user's workouts, optionally within an inclusive date range. `userId` must match the token subject. Supply both range bounds or neither. |
 | `GET /workouts/{id}` | Get workout and nested exercise sessions and sets. |
 | `POST /workouts` | Create workout with required `userId`, `workoutDate`, optional `startedAt`, `completedAt`, `name`, `notes`. Completion cannot precede start. |
 | `PUT /workouts/{id}` | Replace workout metadata with the same body. The owner cannot change; completed workouts are immutable. |
@@ -101,4 +119,4 @@ git push -u origin main
 
 ## Render deployment
 
-Deploy the Dockerfile as a Render Web Service and provision a separate Render PostgreSQL database. Set `SPRING_PROFILES_ACTIVE=prod`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD` in the service environment. `FRONTEND_URL` defaults to `https://level-up-frontend-rho.vercel.app`; set it explicitly if you use a different production origin. Set credentials in Render's secret environment variables only, use the database's private/internal host where available, and do not add PostgreSQL to the application container. The server listens on Render's `PORT` when provided (otherwise `SERVER_PORT`, defaulting to `8080`). Flyway applies pending migrations when the application starts. Configure a health-check path appropriate to your deployment (for example `/v3/api-docs`); protect user data with authentication before making the API publicly accessible.
+Deploy the Dockerfile as a Render Web Service and provision a separate Render PostgreSQL database. Set `SPRING_PROFILES_ACTIVE=prod`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, and a securely generated `JWT_SIGNING_KEY` in Render's environment secrets. Optionally set `AUTH_TOKEN_EXPIRATION_SECONDS`. `FRONTEND_URL` defaults to `https://level-up-frontend-rho.vercel.app`; set it explicitly if you use a different production origin. Set credentials in Render's secret environment variables only, use the database's private/internal host where available, and do not add PostgreSQL to the application container. The server listens on Render's `PORT` when provided (otherwise `SERVER_PORT`, defaulting to `8080`). Flyway applies pending migrations when the application starts. Configure a health-check path appropriate to your deployment (for example `/v3/api-docs`).

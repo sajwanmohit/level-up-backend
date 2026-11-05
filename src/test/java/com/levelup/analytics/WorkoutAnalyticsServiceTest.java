@@ -22,7 +22,9 @@ class WorkoutAnalyticsServiceTest {
 
     @Test void dailyAnalysisExcludesWarmupVolumeAndCountsWorkingMetrics() {
         Exercise exercise = exercise();
-        Workout workout = new Workout(new User("Athlete", "athlete@example.com"), LocalDate.of(2026, 10, 1), null, java.time.Instant.now(), "Push", null);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        Workout workout = new Workout(user, LocalDate.of(2026, 10, 1), null, java.time.Instant.now(), "Push", null);
         ExerciseSession session = new ExerciseSession(workout, exercise, 1, null);
         when(workouts.findById(workoutId)).thenReturn(Optional.of(workout));
         when(sessions.findByWorkoutIdOrderByExerciseOrder(workoutId)).thenReturn(List.of(session));
@@ -31,7 +33,7 @@ class WorkoutAnalyticsServiceTest {
                 new WorkoutSet(session, 2, new BigDecimal("60"), 8, new BigDecimal("8"), new BigDecimal("2"), false, false)));
         when(records.findByWorkoutSetExerciseSessionWorkoutId(workoutId)).thenReturn(List.of());
 
-        var analysis = service.daily(workoutId);
+        var analysis = service.daily(workoutId, userId);
 
         assertEquals(1, analysis.totalExercises());
         assertEquals(1, analysis.totalWorkingSets());
@@ -43,9 +45,11 @@ class WorkoutAnalyticsServiceTest {
     }
 
     @Test void dailyAnalysisRequiresCompletedWorkout() {
-        Workout workout = new Workout(new User("Athlete", "athlete@example.com"), LocalDate.now(), null, null, null, null);
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        Workout workout = new Workout(user, LocalDate.now(), null, null, null, null);
         when(workouts.findById(workoutId)).thenReturn(Optional.of(workout));
-        assertThrows(IllegalArgumentException.class, () -> service.daily(workoutId));
+        assertThrows(IllegalArgumentException.class, () -> service.daily(workoutId, userId));
     }
 
     @Test void progressionAggregatesHistoryAndLatestEstimatedOneRepMax() {
