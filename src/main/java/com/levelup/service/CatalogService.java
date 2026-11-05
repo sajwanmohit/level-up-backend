@@ -15,7 +15,6 @@ public class CatalogService {
     private final UserRepository users;
     private final ExerciseRepository exercises;
     public CatalogService(UserRepository users, ExerciseRepository exercises) { this.users = users; this.exercises = exercises; }
-    public UserResponse createUser(UserRequest request) { return UserResponse.from(users.save(new User(request.name(), request.email()))); }
     public ExerciseResponse createExercise(ExerciseRequest request) {
         return ExerciseResponse.from(exercises.save(new Exercise(request.name(), request.description(), request.muscleGroup(), request.equipment(), request.movementType(), request.compound())));
     }

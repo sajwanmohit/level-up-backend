@@ -8,6 +8,7 @@ import java.math.*;
 import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
 
 @Service
 @Transactional(readOnly = true)
@@ -22,8 +23,9 @@ public class WorkoutAnalyticsService {
                                    PersonalRecordRepository records, ExerciseRepository exercises, OneRepMaxCalculator calculator) {
         this.workouts = workouts; this.sessions = sessions; this.sets = sets; this.records = records; this.exercises = exercises; this.calculator = calculator;
     }
-    public DailyAnalysis daily(UUID workoutId) {
+    public DailyAnalysis daily(UUID workoutId, UUID authenticatedUserId) {
         Workout workout = workouts.findById(workoutId).orElseThrow(() -> new ResourceNotFoundException("Workout", workoutId));
+        if (!workout.getUser().getId().equals(authenticatedUserId)) throw new AccessDeniedException("User does not own this resource");
         if (workout.getCompletedAt() == null) throw new IllegalArgumentException("Workout is not completed");
         List<ExerciseSession> sessionList = sessions.findByWorkoutIdOrderByExerciseOrder(workoutId);
         int workingSets = 0, warmups = 0, totalReps = 0;
